@@ -1,0 +1,21 @@
+.PHONY: package shell
+
+BIONIC_IMAGE=ubuntu:bionic
+FOCAL_IMAGE=ubuntu:focal
+
+ifdef BIONIC
+IMAGE=$(BIONIC_IMAGE)
+else
+IMAGE=$(FOCAL_IMAGE)
+endif
+
+DOCKER=docker run -it --rm -v ${PWD}:/build/docker $(IMAGE)
+
+package:
+	$(DOCKER) /build/docker/build.sh -ib
+
+shell:
+	$(DOCKER) /build/docker/build.sh -s
+
+clean:
+	-rm dist/*.deb

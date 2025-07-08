@@ -1,0 +1,7 @@
+install(FILES ecbpf-root.service DESTINATION /lib/systemd/system)
+install(FILES ecbpf-sampler.service DESTINATION /lib/systemd/system)
+install(FILES ecbpf-filter.service DESTINATION /lib/systemd/system)
+install(FILES ecbpf-bypass.service DESTINATION /lib/systemd/system)
+install(FILES ecbpf-bypass-stats.service DESTINATION /lib/systemd/system)
+install(FILES service.conf.example DESTINATION /etc/ecbpf)
+install(PROGRAMS ecbpf_service_handler.py DESTINATION bin)

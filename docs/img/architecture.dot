@@ -1,0 +1,101 @@
+digraph ecbpf {
+	graph [
+		newrank = true,
+		nodesep = 0.3,
+		ranksep = 0.4,
+		overlap = false,
+		splines = true,
+    rankdir = LR;
+	]
+
+
+  subgraph cluster_kernel {
+    label="kernel"
+      style=solid
+
+      bpf_perf_event [shape=cylinder]
+
+
+        subgraph cluster_xdp { 
+            label="xdp"
+            style=filled
+            color=lightgray
+
+            xdp_root [shape=component,style=filled,fillcolor=white]
+            xdp_sampler[shape=component,style=filled,fillcolor=white]
+            xdp_fw_kern [shape=component,style=filled,fillcolor=white]
+            ipvs_bypass [shape=component,style=filled,fillcolor=white]
+
+        }
+
+
+      subgraph cluster_tc_egress { 
+        label="TC Egress"
+        style=filled
+        color=lightgray
+
+        bpf_egress_syn_check [shape=component,style=filled,fillcolor=white]
+      }
+
+    subgraph cluster_maps { 
+      label="maps"
+      style=dotted
+
+      ipvs_bypass_maps [shape="record",label="{ <tuple> tuple_map | <stats> stats_map | <params> params_map }"]
+      xdp_fw_maps [shape="record" label="{ <rules> xdp_fw_rules_map | <stats> xdp_fw_stats}"]
+    }
+  }
+
+  subgraph cluster_user_space {
+    label="user space"
+    style=solid
+
+
+    xdp_sampler_client [shape=component,group=user]
+    zeromq [shape=cylinder,group=user]
+    xdp_bypass_ipvs [shape=component,group=user]
+    xdp_root_loader [shape=component,group=user]
+    xdp_fw [shape=component,group=user]
+
+    libecbpf [shape=folder]
+    libbpf [shape=folder]
+
+  }
+
+  { rank=same; ipvs_bypass_maps; xdp_fw_maps; bpf_egress_syn_check; }
+  { rank=same; xdp_root; xdp_sampler; xdp_fw_kern; ipvs_bypass; }
+  { rank=same; xdp_sampler_client; zeromq; xdp_bypass_ipvs; xdp_root_loader; xdp_fw; bpf_perf_event; }
+
+  # Ingress to Egress path
+  xdp_root -> xdp_sampler
+  xdp_sampler -> xdp_fw_kern
+  xdp_fw_kern -> ipvs_bypass
+
+  libecbpf -> libbpf
+  xdp_sampler_client -> libecbpf
+  xdp_bypass_ipvs -> libecbpf
+  xdp_root_loader -> libecbpf
+  xdp_fw -> libecbpf
+
+
+  # Bypasses 
+  #ipvs_bypass -> dd_egress [style=bold,label="XDP_PASS Fast Path Bypass",color=green]
+  #xdp_fw_kern -> dd_egress [style=bold,label="XDP_DROP ",color=red]
+
+  # Maps Access
+  bpf_egress_syn_check -> ipvs_bypass_maps [style=dotted]
+  ipvs_bypass -> ipvs_bypass_maps [style=dotted]
+
+  xdp_bypass_ipvs -> ipvs_bypass_maps [style=dotted]
+
+  xdp_fw_kern -> xdp_fw_maps [style=dotted]
+  xdp_fw -> xdp_fw_maps [style=dotted]
+
+
+  # Sampler Data Access
+  bpf_perf_event -> xdp_sampler_client [style=dashed]
+  xdp_sampler_client -> zeromq
+  xdp_sampler -> bpf_perf_event [style=dashed]
+
+}
+

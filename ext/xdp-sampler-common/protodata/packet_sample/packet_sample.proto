@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package packet_sample;
+
+option go_package = "gitlab.edgecastcdn.net/edgecast/trafficeng/xdp-sampler-common/protodata/packet_sample";
+
+// Inspired by libpcap pcap_hdr_s
+message PacketSample { // This is no longer part of EdgeCast/protodata so we don't use snake case
+
+    enum XDPAction {
+        XDP_ABORTED = 0;
+        XDP_DROP = 1;
+        XDP_PASS = 2;
+        XDP_TX = 3;
+        XDP_REDIRECT = 4;
+    };
+
+    // Subset of https://www.tcpdump.org/linktypes.html
+    enum LinkType {
+        LINKTYPE_NULL = 0;
+        LINKTYPE_ETHERNET = 1; // Standard capture including ethernet header
+        LINKTYPE_RAW = 101; // Raw IP; the packet begins with an IPv4 or IPv6 header, with the
+                            // "version" field of the header indicating whether it's an IPv4 or IPv6 header.
+        LINKTYPE_LINUX_SLL = 113;  // Linux capture of "any"
+        LINKTYPE_IPV4 = 228; // Raw packet starting with IPv4 header
+        LINKTYPE_IPV6 = 229; // Raw packet starting with IPv6 header
+        LINKTYPE_LINUX_SLL2 = 276; // Possibly not implemented yet
+    }
+
+    // Information about the host the packet came from
+    message HostInfo {
+        string hostname = 1; // hostname of host doing the capturing
+        string pop = 2;
+        string srvtype = 3;
+    }
+
+    // Information common to all packets
+    message PacketCommon {
+        string interface = 1; // Interface packet came in on
+        LinkType link = 2;
+    }
+
+    // Inspired by libpcap pcaprec_hdr_t
+    message Packet {
+        // Payload
+        int64 tv_sec = 1; // struct timespec
+        int32 tv_nsec = 2;
+        int32 len = 3;  // Length of the original packet
+        bytes pkt = 4; // Length of capture, caplen in pcaprec_hdr_t, is the length here
+
+        // Sample Metadata
+        int32 sampling_probability_reciprocal = 5;
+        int64 sequence = 6; // A sequence number so we can detect dropped packets further up the stack
+        XDPAction xdp_action = 7;
+        sint32 xdp_action_source = 8; // XDP program slot for now.  Root array is -1 in ecbpf-land.
+        uint32 xdp_action_code = 9; // Reason for why the action was taken.
+        uint64 xdp_action_meta = 10; // 64 bits to possibly explain the xdp_action_code.
+    }
+
+    // Payload
+    HostInfo host_info = 1;
+    PacketCommon packet_common = 2;
+    Packet packet = 3;
+    // repeated Packet packets = 4;  // In case we need to bundle more packets together
+}

@@ -1,0 +1,23 @@
+{
+    "files.associations": {
+        "libecbpf.h": "c",
+        "bpf.h": "c",
+        "algorithm": "c",
+        "atomic": "c",
+        "*.tcc": "c",
+        "memory": "c",
+        "new": "c",
+        "numeric": "c",
+        "system_error": "c",
+        "libecbpf_kern.h": "c",
+        "xdp_sampler.h": "c",
+        "rootmaps.h": "c"
+    },
+    "C_Cpp.default.defines": [
+        "_DEFAULT_SOURCE",
+        "XDP_BYPASS_IPVS_COMMON_H_SHA256='vscode: Provided by CMake'"
+    ],
+    "C_Cpp.default.customConfigurationVariables": {
+
+    }
+}

@@ -1,0 +1,547 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+#
+# Vagrant simple POP setup for basic configuration of director(s), configurable
+# # of servers, clients, and a router via Vagrant connections.   This does not
+# include installation of any CDN s/w but should have all the system basics to
+# allow such.  lighttpd is installed on the serves to allow basic testing
+# through the director stack of software, only Linux Virtual Server is setup by
+# default for an IP4 and IP6 VIP.
+#
+#
+# IP4 and IP6 addressing for directors, servers, router, clients and subnets.
+#
+#  IP4 - Use RFC 1918 address space for both test VIP4 and IP4 subnets/systems.
+#
+#  IP6 - Use exact same addresses as above with IP6 "site-local" ULA
+#        fd00::/8 prefix along with the identifying configured test nets'
+#        IP4 lowest-order /24 byte to create a /64.   Note the lower-order
+#        32-bits from the IP4 address will be rendered as hexadecimal in most
+#        displays but this should still be a useful id.
+#
+#        The lowest-order IP4 subnet address byte from the /24 is, effectively,
+#        the "Global Id" and "Subnet Id" fields of a ULA (Unique Local Address)
+#        while the remaining 64-bit "Interface Id" is filled with leading zeroes
+#        for 32-bits plus the 32-bit IP4 address.
+#
+#        Note: At time of this writing, RFC8200 (IPv6 Specification STD 86) is
+#        silent on IPv6 address formats/prefixes which leaves the only mention
+#        of "site local", "ULA" addresses, or any conflicting prefixes in mere
+#        Proposed Standards.   Those specify "site-local" fec0::/10 as
+#        deprecated while a ULA form with the "L" bit set as in fd00::/8 allows
+#        locally assigned addresses (analagous to private RFC 1918) to be used.
+#        So fd00::/8 is what is used below and there is no conflicting prefix
+#        with using the "00" portion to hold our test subnet identifier, it's
+#        simply the high-part of the Global Id.   This has no definition other
+#        than to be randomly-selected for purposes of avoiding collisions with
+#        other sites within some ULA usage area.  That is not a concern here.
+#
+#        References:
+#           RFC 4193 (October 2005) - Unique Local IPv6 Unicast Addresses (ULA)
+#           RFC 4291 (February 2006) - IPv6 Addressing Architecture
+#        
+# Base subnet addresses for each of the 3 test IP subnets: Directors, Servers,
+# Clients.  Each is intended to be a /24 prefix with a host # appended.
+DNET4_24 = "192.168.56"
+SNET4_24 = "192.168.57"
+CNET4_24 = "192.168.58"
+
+# Equivalent in IP6 for above but with the goal of having common /64 addressing,
+# just need to append the 32-bit IP4 host address for the lower-64 bits (leading
+# zeroes + IP4 address).
+DNET6_64 = "fd56::"
+SNET6_64 = "fd57::"
+CNET6_64 = "fd58::"
+
+# Test system IP4 and IP6 addresses for Router, Directors, Servers, Clients
+ROUTER_DNET_IP = "#{DNET4_24}.4"
+ROUTER_SNET_IP = "#{SNET4_24}.4"
+ROUTER_CNET_IP = "#{CNET4_24}.4"
+
+ROUTER_DNET_IP6 = "#{DNET6_64}#{ROUTER_DNET_IP}"
+ROUTER_SNET_IP6 = "#{SNET6_64}#{ROUTER_SNET_IP}"
+ROUTER_CNET_IP6 = "#{CNET6_64}#{ROUTER_CNET_IP}"
+
+# TODO: Plan to have multiple directors and do an ECMP-like simulation on the
+# router, probably by using policy routing and iptables hash calcs to mark.
+DIRECTOR1_DNET_IP = "#{DNET4_24}.11"
+DIRECTOR1_SNET_IP = "#{SNET4_24}.11"
+DIRECTOR2_DNET_IP = "#{DNET4_24}.12"
+DIRECTOR2_SNET_IP = "#{SNET4_24}.12"
+
+DIRECTOR1_DNET_IP6 = "#{DNET6_64}#{DIRECTOR1_DNET_IP}"
+DIRECTOR1_SNET_IP6 = "#{SNET6_64}#{DIRECTOR1_SNET_IP}"
+DIRECTOR2_DNET_IP6 = "#{DNET6_64}#{DIRECTOR2_DNET_IP}"
+DIRECTOR2_SNET_IP6 = "#{SNET6_64}#{DIRECTOR2_SNET_IP}"
+
+CLIENT1_CNET_IP = "#{CNET4_24}.31"
+CLIENT2_CNET_IP = "#{CNET4_24}.32"
+
+CLIENT1_CNET_IP6 = "#{CNET6_64}#{CLIENT1_CNET_IP}"
+CLIENT2_CNET_IP6 = "#{CNET6_64}#{CLIENT2_CNET_IP}"
+
+# Allow a configurable # servers, preconfigure for up to 5 to be selected by
+# specifying SERVERS_COUNT.   Default is 1 server.
+SERVER_SNET_IP = "#{SNET4_24}.21"
+SERVER2_SNET_IP = "#{SNET4_24}.22"
+SERVER3_SNET_IP = "#{SNET4_24}.23"
+SERVER4_SNET_IP = "#{SNET4_24}.24"
+SERVER5_SNET_IP = "#{SNET4_24}.25"
+
+SERVER_SNET_IP6 = "#{SNET6_64}#{SERVER_SNET_IP}"
+SERVER2_SNET_IP6 = "#{SNET6_64}#{SERVER2_SNET_IP}"
+SERVER3_SNET_IP6 = "#{SNET6_64}#{SERVER3_SNET_IP}"
+SERVER4_SNET_IP6 = "#{SNET6_64}#{SERVER4_SNET_IP}"
+SERVER5_SNET_IP6 = "#{SNET6_64}#{SERVER5_SNET_IP}"
+
+SERVERS_MAX = 5
+
+# Arrays of above for convenient access in vagrant config and provisioning
+SERVERS_NAMES = [ "server", "server2", "server3", "server4", "server5" ]
+SERVERS_NAMES6 = [ "server-6", "server2-6", "server3-6", "server4-6", "server5-6" ]
+SERVERS_IP = [ SERVER_SNET_IP, SERVER2_SNET_IP, SERVER3_SNET_IP, SERVER4_SNET_IP, SERVER5_SNET_IP ]
+SERVERS_IP6 = [ SERVER_SNET_IP6, SERVER2_SNET_IP6, SERVER3_SNET_IP6, SERVER4_SNET_IP6, SERVER5_SNET_IP6 ]
+
+# Default is to provision just 1 server (for speedier check out of basic flows)
+# unless defined/overridden in ~/.vagrant.d/Vagrantfile (or equivalent) with a
+# line such as:  SERVERS_COUNT = 3
+if !defined?(SERVERS_COUNT)
+  SERVERS_COUNT = 1
+end
+if SERVERS_COUNT > SERVERS_MAX
+  abort("Vagrant abort: SERVERS_COUNT too large!")
+end
+if SERVERS_COUNT < 1
+  abort("Vagrant abort: SERVERS_COUNT less than one!")
+end
+
+# Test anycast addresses for director and server loopbacks
+VIP4 = "172.16.5.1"
+VIP6 = "fdac::#{VIP4}"
+
+# Vagrant boxes tested, status as of 10/2024 for using Jammy ecbpf
+#
+#   "bento/ubuntu-24.04" - works, but beyond current production (as of 10/24)
+#   "bento/ubuntu-22.04" - hangs during boot, no DHCP/Bootp for ssh after boots
+#   "generic/ubuntu2204" - kernel.org version, which works
+#   "ubuntu/jammy64" - VirtualBox only, not useable if libvirt required
+#
+# A ~/.vagrant.d/Vagrantfile may be used to provide definitions before this
+# main one.   An example of the 2 lines needed in such a file to use "libvirt",
+# given the above, are as follows (without the "#" comment marker):
+# 
+# ENV['VAGRANT_DEFAULT_PROVIDER'] = "libvirt"
+# BOX_IMAGE = "bento/ubuntu-24.04"
+
+# If neither a BOX nor provider are explicitly specified then the following
+# chooses a virtualbox-supporting image to be consistent with "virtualbox"
+# being the default provider based on the provider orderings in the remainder
+# of this file.
+if !defined?(BOX_IMAGE)
+  BOX_IMAGE = "ubuntu/jammy64"
+end
+
+# bento box points sources file to germany-local repo which wrecks performance
+# in US.   So set a flag to apply an edit change to the specified sources.list.d
+# file with old SOURCE strings to be replaced with new SOURCE string.
+#
+# Pass edit flags to the provision shell, only for the bento boxes currently.
+if BOX_IMAGE[0..4] == "bento"
+  EDIT_SOURCES_FILE="/etc/apt/sources.list.d/ubuntu.sources"
+  EDIT_OLD_SOURCE_STR="de.archive.ubuntu.com"
+  EDIT_NEW_SOURCE_STR="mirrors.ocf.berkeley.edu"
+else
+  EDIT_SOURCES_FILE=""
+  EDIT_OLD_SOURCE_STR=""
+  EDIT_NEW_SOURCE_STR=""
+end
+
+
+# ETC_HOSTS_SETUP script to provision /etc/hosts for all VM interfaces
+
+$ETC_HOSTS_SETUP = <<-END_ETC_HOSTS_SETUP
+  printf "\\n# All configured Vagrant VMs interfaces and VIPs\\n" >> /etc/hosts
+  echo "#{CLIENT1_CNET_IP} client" >> /etc/hosts
+  echo "#{DIRECTOR1_DNET_IP} director" >> /etc/hosts
+  echo "#{DIRECTOR1_SNET_IP} director-snet" >> /etc/hosts
+  echo "#{ROUTER_DNET_IP} router-dnet" >> /etc/hosts
+  echo "#{ROUTER_SNET_IP} router-snet" >> /etc/hosts
+  echo "#{ROUTER_CNET_IP} router-cnet" >> /etc/hosts
+  echo "#{VIP4} vip4" >> /etc/hosts
+
+  echo "#{CLIENT1_CNET_IP6} client-6" >> /etc/hosts
+  echo "#{DIRECTOR1_DNET_IP6} director-6" >> /etc/hosts
+  echo "#{DIRECTOR1_SNET_IP6} director-snet6" >> /etc/hosts
+  echo "#{ROUTER_DNET_IP6} router-dnet6" >> /etc/hosts
+  echo "#{ROUTER_SNET_IP6} router-snet6" >> /etc/hosts
+  echo "#{ROUTER_CNET_IP6} router-cnet6" >> /etc/hosts
+  echo "#{VIP6} vip6" >> /etc/hosts
+
+  # The number of server entries can be configured, bring Ruby arrays from
+  # vagrant into local shell variables and then process.
+  
+  S_NAMES=( `echo '#{SERVERS_NAMES}' | jq -r '@tsv'` )
+  S_IP=( `echo '#{SERVERS_IP}' | jq -r '@tsv'` )
+  S_NAMES6=( `echo '#{SERVERS_NAMES6}' | jq -r '@tsv'` )
+  S_IP6=( `echo '#{SERVERS_IP6}' | jq -r '@tsv'` )
+
+  IDX=0
+  while ( test $IDX -lt #{SERVERS_COUNT} ) ; do
+    echo "${S_IP[$IDX]} ${S_NAMES[$IDX]}" >> /etc/hosts
+    echo "${S_IP6[$IDX]} ${S_NAMES6[$IDX]}" >> /etc/hosts
+    IDX=$(( IDX + 1 ))
+  done
+END_ETC_HOSTS_SETUP
+
+
+# IP6_ADD_TO_IP4_IF script for provisioning IP6 addresses to proper interfaces
+#
+# Script to look up an IP4 address' interface and add the specified IP6
+# address to that same interface.   This approach is robust in the face
+# of kernel enumeration and naming differences and ensures that the IP6
+# addresses are at the correct network topology points (bridges) configured
+# by Vagrant.
+#
+# "ip -6 addr add" commands are added to /etc/rc.local
+#
+# invocation example (multiple provision blocks are allowed per VM):
+#
+# <vm-name>.vm.provision "shell" do |s|
+#      s.inline = $IP6_ADD_TO_IP4_IF
+#      s.args = [ "#{ROUTER_DNET_IP}", "#{ROUTER_DNET_IP6}", "#{ROUTER_SNET_IP}", "#{ROUTER_SNET_IP6}", "#{ROUTER_CNET_IP}", "#{ROUTER_CNET_IP6}" ]
+#    end
+#
+# Where:
+#   s.inline - this script's name
+#   s.args - array of parameters, pairs of configured IP4 address followed by
+#            desired IP6 address to add to the IP4 interface
+
+# NOTE: Following "here" document is entirely escaped so backslashes need no
+# extra backslash.
+$IP6_ADD_TO_IP4_IF = <<-'END_IP6_ADD_TO_IP4_IF'
+  # Populate /etc/rc.local with static config, reboot invokes via systemd
+  if [ ! -e /etc/rc.local ] ; then
+    printf "#!/bin/bash\n" > /etc/rc.local
+  fi
+
+  printf "\n# Add IP6 address(es) to same interface(s) as IP4 versions\n" >> /etc/rc.local
+  printf "# IP4 provisioned interface gets equivalent IP6 address added.\n\n" >> /etc/rc.local
+
+  while [ -n "$1" ] 
+  do
+    # Note: first "jq" line is pretty long with several stages so has been
+    # carefully split into separate lines for some addtional clarity.
+    # Single quote concatenation is "fussy" (precluding indentation, for
+    # example) so check any changes carefully.
+    ip -j addr sh | \
+    jq --compact-output -r  --arg ADDR $1 '.[] | . as $ifrecord | '\
+'.addr_info[] | select($ADDR == .local) | '\
+'[.prefixlen,$ifrecord.ifname,$ifrecord.ifindex,$ADDR]' | \
+    jq -r '@tsv' | \
+    ( read plen ifname ifindex ip
+      echo "# IP4 addr: $1/$plen  ifname: $ifname  ifindex: $ifindex"
+      printf "ip -6 addr add $2/64 dev $ifname\n\n"
+    ) >> /etc/rc.local
+    shift 2
+  done
+  echo " " >> /etc/rc.local
+END_IP6_ADD_TO_IP4_IF
+
+# All Vagrant configuration is done below. The "2" in Vagrant.configure
+# configures the configuration version (we support older styles for
+# backwards compatibility). Please don't change it unless you know what
+# you're doing.
+Vagrant.configure("2") do |config|
+
+# Simplest pop: director, server, router, client
+
+  # Generic memory/cpu config for libvirt and virtualbox so there is a common
+  # base VM configuration.  Note: Due to ordering of providers here THIS will
+  # determine the default provider if it isn't explicitly specified via the
+  # --provider command line option or VAGRANT_DEFAULT_PROVIDER in the shell
+  # or ~/.vagrant.d/Vagrantfile.
+  config.vm.provider "virtualbox" do |vb|
+      vb.memory = 1024
+      vb.cpus = 2
+  end
+
+  config.vm.provider "libvirt" do |lv|
+      lv.memory = 1024
+      lv.cpus = 2
+  end
+
+  # Director updated for latest ipvs and packages to support XDP ecbpf.
+  #
+  # This director is configured without bonds, using a single "internet" facing
+  # interface and a server-facing one on a distinct subnet for ipvs
+  # (Or fastpath) to forward packets on to servers.  
+
+  config.vm.define "director" do |director|
+    # Director config needs larger memory, for now, to load production fastpath.
+    # Supply both libvirt and virtualbox provider configs.
+    director.vm.provider "virtualbox" do |vb|
+      vb.memory = 16384
+      vb.cpus = 2
+    end
+
+    director.vm.provider "libvirt" do |lv|
+      lv.memory = 16384
+      lv.cpus = 2
+    end
+
+    director.vm.box = BOX_IMAGE
+    director.vm.hostname = "director"
+    director.vm.network "private_network", ip: DIRECTOR1_DNET_IP, hostname: true
+    director.vm.network "private_network", ip: DIRECTOR1_SNET_IP
+
+    # Basic director VM packages required or updated
+    director.vm.provision "shell", inline: <<-END_INLINE
+      if [ "#{EDIT_SOURCES_FILE}" != "" ] ; then
+        cp -p "#{EDIT_SOURCES_FILE}" "#{EDIT_SOURCES_FILE}.orig"
+        printf "\\nEditing #{EDIT_SOURCES_FILE} with following:\\n"
+        echo "  " sed -i 's/#{EDIT_OLD_SOURCE_STR}/#{EDIT_NEW_SOURCE_STR}/w /dev/stdout' #{EDIT_SOURCES_FILE}
+        EDIT_CNT=`sed -i 's/#{EDIT_OLD_SOURCE_STR}/#{EDIT_NEW_SOURCE_STR}/w /dev/stdout' #{EDIT_SOURCES_FILE} | wc -l`
+        printf "  $EDIT_CNT line(s) modified\\n\\n"
+        if [ $EDIT_CNT -ne 1 ] ; then
+          printf "**********\\n"
+          printf "Unexpected #{EDIT_SOURCES_FILE} changes!!!\\n"
+          printf "  Check contents, including pre-edit .orig version.\\n"
+          printf "**********\\n\\n"
+        fi
+      fi
+
+      apt-get -y update
+      apt-get -y dist-upgrade
+
+      if [[ "#{BOX_IMAGE}" =~ "ubuntu/" ]] ; then
+        if [[ $(lsb_release -cs) =~ jammy ]] ; then
+          apt-get -y install linux-generic-hwe-22.04-edge
+        fi
+      fi
+
+      apt-get -y install jq
+      apt-get -y install ipvsadm
+
+      # Needed by ecbpf installs
+      apt-get -y install libczmq4
+      apt-get -y install binutils
+      apt-get -y install lldpd
+      apt-get -y install libprotobuf-c1
+    END_INLINE
+
+    # Provision consistent /etc/hosts entries for all VMs defined.
+    director.vm.provision "shell", inline: $ETC_HOSTS_SETUP
+
+    # Provision/configure IP6 addresses on this director via script
+    director.vm.provision "shell" do |s|
+      s.inline = $IP6_ADD_TO_IP4_IF
+      s.args = [ "#{DIRECTOR1_DNET_IP}", "#{DIRECTOR1_DNET_IP6}", "#{DIRECTOR1_SNET_IP}", "#{DIRECTOR1_SNET_IP6}" ]
+    end
+
+    # Remainder of director provisioning steps
+    director.vm.provision "shell", inline: <<-END_INLINE
+
+      printf "# Add VIP and iptables/ipvsadm forwarding\\n" >> /etc/rc.local
+      printf "ip addr add #{VIP4} dev lo\\n" >> /etc/rc.local
+      printf "ip -6 addr add #{VIP6} dev lo\\n\\n" >> /etc/rc.local
+
+      printf "iptables -t mangle -A PREROUTING -d #{VIP4} -j MARK --set-xmark 0x12\\n" >> /etc/rc.local
+      printf "ip6tables -t mangle -A PREROUTING -d #{VIP6} -j MARK --set-xmark 0x1c\\n" >> /etc/rc.local
+      printf "ipvsadm -A -f 18 -s wrr\\n" >> /etc/rc.local
+      printf "ipvsadm -A -f 28 -6 -s wrr\\n" >> /etc/rc.local
+
+      # Number of servers is configurable, fetch vagrant arrays into this shell
+      # and generate the real system addresses.
+      S_IP=( `echo '#{SERVERS_IP}' | jq -r '@tsv'` )
+      S_IP6=( `echo '#{SERVERS_IP6}' | jq -r '@tsv'` )
+
+      IDX=0
+      while ( test $IDX -lt #{SERVERS_COUNT} ) do
+        printf "ipvsadm -a -f 18 -r ${S_IP[$IDX]}:0 -g -w 9999\\n" >> /etc/rc.local
+        printf "ipvsadm -a -f 28 -6 -r ["${S_IP6[$IDX]}"]:0 -g -w 9999\\n" >> /etc/rc.local
+        IDX=$(( IDX + 1 ))
+      done
+      printf "\\n" >> /etc/rc.local
+
+      printf "# Routes to reach client subnet\\n" >> /etc/rc.local
+      printf "ip route add #{CNET4_24}.0/24 via #{ROUTER_DNET_IP}\\n" >> /etc/rc.local
+      printf "ip -6 route add #{CNET6_64}/64 via #{ROUTER_DNET_IP6}\\n\\n" >> /etc/rc.local
+      chmod +x /etc/rc.local
+      . /etc/rc.local
+
+      printf "\\n/etc/rc.local with provisioning mods for reboots:\\n"
+      cat /etc/rc.local
+      printf "\\n"
+
+      # Likely new kernel or other packages, so simply reboot
+      reboot
+    END_INLINE
+  end
+
+  # Server(s) replicated as per SERVERS_COUNT, with latest release of lighttpd
+(0..SERVERS_COUNT - 1).each do |sidx|
+  config.vm.define "#{SERVERS_NAMES[sidx]}" do |server|
+    server.vm.box = BOX_IMAGE
+    server.vm.hostname = "#{SERVERS_NAMES[sidx]}"
+    server.vm.network "private_network", ip: "#{SERVERS_IP[sidx]}", hostname: true
+    # Basic server VM packages required or updated
+    server.vm.provision "shell", inline: <<-END_INLINE
+      if [ "#{EDIT_SOURCES_FILE}" != "" ] ; then
+        cp -p "#{EDIT_SOURCES_FILE}" "#{EDIT_SOURCES_FILE}.orig"
+        printf "\\nEditing #{EDIT_SOURCES_FILE} with following:\\n"
+        echo "  " sed -i 's/#{EDIT_OLD_SOURCE_STR}/#{EDIT_NEW_SOURCE_STR}/w /dev/stdout' #{EDIT_SOURCES_FILE}
+        EDIT_CNT=`sed -i 's/#{EDIT_OLD_SOURCE_STR}/#{EDIT_NEW_SOURCE_STR}/w /dev/stdout' #{EDIT_SOURCES_FILE} | wc -l`
+        printf "  $EDIT_CNT line(s) modified\\n\\n"
+        if [ $EDIT_CNT -ne 1 ] ; then
+          printf "**********\\n"
+          printf "Unexpected #{EDIT_SOURCES_FILE} changes!!!\\n"
+          printf "  Check contents, including pre-edit .orig version.\\n"
+          printf "**********\\n\\n"
+        fi
+      fi
+
+      apt-get -y update
+      apt-get -y upgrade
+
+      apt-get -y install jq
+    END_INLINE
+
+    # Provision consistent /etc/hosts entries for all VMs defined.
+    server.vm.provision "shell", inline: $ETC_HOSTS_SETUP
+
+    # Provision/configure IP6 address on this server via script
+    server.vm.provision "shell" do |s|
+      s.inline = $IP6_ADD_TO_IP4_IF
+      s.args = [ "#{SERVERS_IP[sidx]}", "#{SERVERS_IP6[sidx]}" ]
+    end
+
+    # Remainder of server provisioning steps
+    server.vm.provision "shell", inline: <<-END_INLINE
+      printf "# Add VIPs to loopback to receive packets\\n" >> /etc/rc.local
+      printf "ip addr add #{VIP4} dev lo\\n" >> /etc/rc.local
+      printf "ip -6 addr add #{VIP6} dev lo\\n\\n" >> /etc/rc.local
+
+      printf "# Routes to reach clients or directors inbound \\n" >> /etc/rc.local
+      printf "ip route add #{DNET4_24}.0/24 via #{ROUTER_SNET_IP}\\n" >> /etc/rc.local
+      printf "ip route add #{CNET4_24}.0/24 via #{ROUTER_SNET_IP}\\n" >> /etc/rc.local
+      printf "ip -6 route add #{DNET6_64}/64 via #{ROUTER_SNET_IP6}\\n" >> /etc/rc.local
+      printf "ip -6 route add #{CNET6_64}/64 via #{ROUTER_SNET_IP6}\\n\\n" >> /etc/rc.local
+
+      chmod +x /etc/rc.local
+      . /etc/rc.local
+
+      # Install lighttpd here, with all configured addresses in place.
+      apt-get -y install lighttpd
+
+      # Add 2 lighttpd access logging lines, upcoming reboot will activate them
+      #
+      # Note extra-escaped backlashes to \t and others to preserve them from
+      # Ruby processing.
+      sed -i -e '/mod_redirect.*$/a"mod_accesslog",' /etc/lighttpd/lighttpd.conf
+      sed -i -e 's/^\\("mod_accesslog",.*$\\)/\\t\\1/' /etc/lighttpd/lighttpd.conf
+      sed -i -e '/server.errorlog.*$/aaccesslog.filename          = "/var/log/lighttpd/access.log"' /etc/lighttpd/lighttpd.conf
+
+      # Set up lighttpd with some sample objects to fetch, encrypt with a fixed
+      # size and key (other than small.txt one) so can generate same object on
+      # multiple servers.
+      tail -n +2 /etc/hosts > /var/www/html/small.txt
+      sha1sum /var/www/html/small.txt > /var/www/html/small.sha1
+      chmod a+r /var/www/html/small.*
+      dd if=/dev/zero bs=1M count=16 | openssl enc -e -aes-256-cbc -k "fake password" -nosalt -iter 2 > /var/www/html/medium.bin
+      sha1sum /var/www/html/medium.bin > /var/www/html/medium.sha1
+      chmod a+r /var/www/html/medium.*
+      dd if=/dev/zero bs=1M count=256 | openssl enc -e -aes-256-cbc -k "fake password" -nosalt -iter 2 > /var/www/html/large.bin
+      sha1sum /var/www/html/large.bin > /var/www/html/large.sha1
+      chmod a+r /var/www/html/large.*
+
+      printf "\\n/etc/rc.local with provisioning mods for reboots:\\n"
+      cat /etc/rc.local
+      printf "\\n"
+
+      # Likely new kernel or other packages, so simply reboot
+      reboot
+    END_INLINE
+  end
+end
+
+  # Router is generic, no need to install anything additional.
+  config.vm.define "router" do |router|
+    router.vm.box = BOX_IMAGE
+    router.vm.hostname = "router"
+    router.vm.network "private_network", ip: ROUTER_DNET_IP, hostname: true
+    router.vm.network "private_network", ip: ROUTER_SNET_IP
+    router.vm.network "private_network", ip: ROUTER_CNET_IP
+
+    # Basic router VM packages required or updated
+    router.vm.provision "shell", inline: <<-END_INLINE
+      apt-get -y upgrade
+      apt-get -y install jq
+    END_INLINE
+
+    # Provision consistent /etc/hosts entries for all VMs defined.
+    router.vm.provision "shell", inline: $ETC_HOSTS_SETUP
+
+    # Provision/configure IP6 addresses on this router via script
+    router.vm.provision "shell" do |s|
+      s.inline = $IP6_ADD_TO_IP4_IF
+      s.args = [ "#{ROUTER_DNET_IP}", "#{ROUTER_DNET_IP6}", "#{ROUTER_SNET_IP}", "#{ROUTER_SNET_IP6}", "#{ROUTER_CNET_IP}", "#{ROUTER_CNET_IP6}" ]
+    end
+
+    # Configure all routes and final provisioning steps
+    router.vm.provision "shell", inline: <<-END_INLINE
+      echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+      echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf
+      sysctl -w net.ipv4.ip_forward=1
+      sysctl -w net.ipv6.conf.all.forwarding=1
+
+      printf "# Routes to reach VIPs (via director1 currently)\\n" >> /etc/rc.local
+      printf "ip route add #{VIP4} via #{DIRECTOR1_DNET_IP}\\n" >> /etc/rc.local
+      printf "ip -6 route add #{VIP6} via #{DIRECTOR1_DNET_IP6}\\n\\n" >> /etc/rc.local
+
+      printf "\\n/etc/rc.local with provisioning mods for reboots and execute now:\\n"
+      chmod +x /etc/rc.local
+      cat /etc/rc.local
+      printf "\\n"
+      . /etc/rc.local
+    END_INLINE
+  end
+
+  # Simple client on "external" network from POP
+  config.vm.define "client" do |client|
+    client.vm.box = BOX_IMAGE
+    client.vm.hostname = "client"
+    client.vm.network "private_network", ip: CLIENT1_CNET_IP, hostname: true
+
+    # Basic client VM packages required or updated
+    client.vm.provision "shell", inline: <<-END_INLINE
+      apt-get -y upgrade
+      apt-get -y install jq
+    END_INLINE
+
+    # Provision consistent /etc/hosts entries for all VMs defined.
+    client.vm.provision "shell", inline: $ETC_HOSTS_SETUP
+
+    # Provision/configure IP6 address on this client via script
+    client.vm.provision "shell" do |s|
+      s.inline = $IP6_ADD_TO_IP4_IF
+      s.args = [ "#{CLIENT1_CNET_IP}", "#{CLIENT1_CNET_IP6}" ]
+    end
+
+    # Configure all routes and final provisioning steps
+    client.vm.provision "shell", inline: <<-END_INLINE
+      printf "# Routes to reach VIPs, directors or servers\\n" >> /etc/rc.local
+      echo "ip route add #{DNET4_24}.0/24 via #{ROUTER_CNET_IP}" >> /etc/rc.local
+      echo "ip route add #{SNET4_24}.0/24 via #{ROUTER_CNET_IP}" >> /etc/rc.local
+      echo "ip route add #{VIP4} via #{ROUTER_CNET_IP}" >> /etc/rc.local
+      echo "ip -6 route add #{DNET6_64}/64 via #{ROUTER_CNET_IP6}" >> /etc/rc.local
+      echo "ip -6 route add #{SNET6_64}/64 via #{ROUTER_CNET_IP6}" >> /etc/rc.local
+      echo "ip -6 route add #{VIP6} via #{ROUTER_CNET_IP6}" >> /etc/rc.local
+      chmod +x /etc/rc.local
+      printf "\\n/etc/rc.local with provisioning mods for reboots and execute now:\\n"
+      cat /etc/rc.local
+      printf "\\n"
+      . /etc/rc.local
+    END_INLINE
+  end
+end

@@ -1,0 +1,17 @@
+[Unit]
+Description=ECBPF XDP root array
+# Make sure the interfaces exist
+After=network.target lldpd.service
+# Make sure perftune is run after
+Before=perftune.service
+
+[Service]
+Type=oneshot
+LimitMEMLOCK=infinity
+ExecStart=/usr/bin/ecbpf_service_handler.py start root
+RemainAfterExit=true
+ExecStop=/usr/bin/ecbpf_service_handler.py stop root
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target network-online.target

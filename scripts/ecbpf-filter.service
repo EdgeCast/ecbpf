@@ -1,0 +1,13 @@
+[Unit]
+Description=ECBPF Source IP and IP Fragment Filter
+BindsTo=ecbpf-root.service
+After=network.target perftune.service ecbpf-root.service
+
+[Service]
+Type=simple
+LimitMEMLOCK=infinity
+ExecStart=/usr/bin/ecbpf_service_handler.py start filter
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

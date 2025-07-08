@@ -1,0 +1,72 @@
+# Drop only ack, not ack psh
+ip from any to any tcp flags {ack} mask {ack,psh}
+ip6 from any to any tcp flags {ack} mask {ack,psh}
+
+#Len 60 IPv4 Src 99.179.48.253 -> Dst 152.195.8.8 proto tcp sport 50633 -> dport 80 window 4160 flags ( ack )
+test sha1 5ee7710e4f59c537e76c9d243658931828ce296d xdp_action XDP_DROP
+
+#Len 66 IPv4 Src 104.229.56.29 -> Dst 152.195.8.23 proto tcp sport 39546 -> dport 443 window 31889 flags ( ack )
+test sha1 4629d8d8b2c9ba0d082b503f96636cc7798a717e xdp_action XDP_DROP
+
+#Len 86 IPv6 Src 2600:1700:adb0:2f50:264c:e3ff:fe1f:6c97 -> Dst 2606:2800:21f:25aa:17fb:af6:e20:2089 proto tcp sport 57165 -> dport 443 window 8699 flags ( ack )
+test sha1 e1b0527f80aa8fe1aa4bd3de7989b02c37847a89 xdp_action XDP_DROP
+
+#Len 86 IPv6 Src 2600:1702:4420:5cd0:d978:5010:17f:9225 -> Dst 2606:2800:21f:fedd:8b7a:88ab:fc7e:fa3b proto tcp sport 59423 -> dport 443 window 4058 flags ( ack )
+test sha1 1701a3c99fccebfcf4b4a53e18cbce9808947623 xdp_action XDP_DROP
+
+#Len 210 IPv6 Src 2606:2800:4212:b::d007 -> Dst 2606:2800:400c:856:b::1 proto tcp sport 22 -> dport 56182 window 501 flags ( ack psh )
+test sha1 8a1f4ba95963c8492cf68c3396968228d48a6b65 xdp_action XDP_PASS
+
+#Len 368 IPv4 Src 99.135.92.33 -> Dst 152.195.8.8 proto tcp sport 54217 -> dport 80 window 514 flags ( ack psh )
+test sha1 9122f181f68fe207999f5c28d4a10ddee6d4ee56 xdp_action XDP_PASS
+
+#Len 348 IPv4 Src 75.27.4.142 -> Dst 152.195.8.8 proto tcp sport 52845 -> dport 80 window 3114 flags ( ack psh )
+test sha1 5d1cb87352d541bebc0dbf19d4c7d5ff565c3deb xdp_action XDP_PASS
+
+#Len 74 IPv6 Src 2601:447:c000:2fb0:35d5:b632:ae88:5d6e -> Dst 2606:2800:21f:dc2:1fe1:23fc:954:1461 proto tcp Packet shorter than struct tcphdr
+test sha1 fdf43be460097ab7dfff28ed3754c04c9494819d xdp_action XDP_PASS
+
+#Len 379 IPv4 Src 99.92.229.190 -> Dst 152.195.8.8 proto tcp sport 55697 -> dport 80 window 4160 flags ( ack psh )
+test sha1 47671b6f534c48f12cece160496f376bc6a64e4a xdp_action XDP_PASS
+
+#Len 284 IPv6 Src 2600:6c46:6100:15d:d810:6d1e:f6d9:9796 -> Dst 2606:2800:21f:dc2:1fe1:23fc:954:1461 proto tcp sport 36514 -> dport 443 window 95 flags ( ack psh )
+test sha1 1fb42177fa275bff6c456385abd198b59980bf7e xdp_action XDP_PASS
+
+#Len 66 IPv4 Src 162.239.251.20 -> Dst 152.195.8.8 proto tcp sport 52263 -> dport 80 window 65518 flags ( syn )
+test sha1 35872635ca7d8fcde150de21684df8269473cd36 xdp_action XDP_PASS
+
+#Len 94 IPv6 Src 2600:6c44:257f:e449:e9ec:c2d6:226b:dc66 -> Dst 2606:2800:21f:fc04:5986:6e4b:ba31:9965 proto tcp sport 53092 -> dport 443 window 28800 flags ( syn )
+test sha1 139f94fc8695bf89a4811ee707c73720749bb6fa xdp_action XDP_PASS
+
+#Len 74 IPv4 Src 136.34.6.214 -> Dst 152.195.8.23 proto tcp sport 35748 -> dport 443 window 42340 flags ( syn )
+test sha1 2b255e1a865cf85dee1d9aef7898d4f9717a2fd4 xdp_action XDP_PASS
+
+#Len 118 IPv6 Src 2606:2800:4212:b::d007 -> Dst 2607:f8b0:4009:815::2004 proto icmp6 type 128 code 0
+test sha1 1b315f8fa2592a07f4dc715d4d4a7a7e6f983e0a xdp_action XDP_PASS
+
+#Len 118 IPv6 Src 2607:f8b0:4009:815::2004 -> Dst 2606:2800:4212:b::d007 proto icmp6 type 129 code 0
+test sha1 d3990ec4cdcdd342de7bb5e5a3842cae8cb12ea1 xdp_action XDP_PASS
+
+#Len 98 IPv4 Src 198.7.18.21 -> Dst 198.7.18.42 proto icmp type 8 code 0
+test sha1 ce9ae000e1a067fe58ffba1bb0242fb2643c1a2e xdp_action XDP_PASS
+
+#Len 98 IPv4 Src 198.7.18.42 -> Dst 198.7.18.21 proto icmp type 0 code 0
+test sha1 2c306899553189c8c2520b19edf45f4d037b44a4 xdp_action XDP_PASS
+
+#Len 118 IPv6 Src 2606:2800:4212::b1 -> Dst 2606:2800:4212:b::d007 proto icmp6 type 128 code 0
+test sha1 a4298a0983ca63099cf2dd4c35147390d088fdb8 xdp_action XDP_PASS
+
+#Len 118 IPv6 Src 2606:2800:4212:b::d007 -> Dst 2606:2800:4212::b1 proto icmp6 type 129 code 0
+test sha1 c53642ce08b6704c547c58db9c6107963c9aaaf4 xdp_action XDP_PASS
+
+#Len 571 IPv6 Src 2606:2800:4212:b::d001 -> Dst 2606:2800:4203:401e:5ea8:40c8:73fc:a0c2 proto udp sport 41144 -> dport 5544
+test sha1 a4e2b57da7904c7a5bab70eb9c35a5da14403aea xdp_action XDP_PASS
+
+#Len 400 IPv4 Src 198.7.18.36 -> Dst 108.161.241.225 proto udp sport 56862 -> dport 5544
+test sha1 0e3c40feb7eee8af30933a08dc1de9476f129005 xdp_action XDP_PASS
+
+#Len 85 IPv4 Src 198.7.18.36 -> Dst 192.229.150.190 proto udp sport 37224 -> dport 53
+test sha1 899e948ba034685eec9f504559cf19a399306fa4 xdp_action XDP_PASS
+
+#Len 145 IPv4 Src 192.229.150.190 -> Dst 198.7.18.36 proto udp sport 53 -> dport 37224
+test sha1 7d95c045646a089fae7969a974d96d921787bd55 xdp_action XDP_PASS

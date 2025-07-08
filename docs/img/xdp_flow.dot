@@ -1,0 +1,88 @@
+digraph ecbpf {
+	graph [
+		newrank = true,
+		nodesep = 0.3,
+		ranksep = 0.2,
+		overlap = false,
+		splines = true,
+    rankdir = LR;
+	]
+
+
+  subgraph cluster_kernel {
+    label="kernel"
+      style=solid
+
+    subgraph cluster_egress { 
+      label="Egress"
+      style=filled
+      color=lightgray
+
+        dd_egress [shape=diamond]
+
+        subgraph cluster_tc_egress { 
+          label="TC Egress"
+          style=filled
+          color=white
+
+          tc_egress_bpf [shape=component]
+        }
+
+    } 
+
+      subgraph cluster_ingress { 
+        label="Ingress"
+        style=filled
+        color=lightgray
+
+
+        subgraph cluster_dd_ingress { 
+            label="Device/Driver"
+            style=filled
+            color=white
+
+            dd_ingress [shape=diamond]
+            dd_ingress_xdp [shape=component]
+        }
+
+        tc_ingress[shape=box,label="TC Ingress"]
+
+      }
+
+    network_stack[shape=box,label="Network Stack"]
+
+    ipvs [shape=box, label="IPVS"]
+    drop [shape=circle,label="Drop",color=red]
+
+  }
+
+  subgraph cluster_user_space {
+    label="user space"
+    style=solid
+
+    apps [shape=box,label="Client/Server Applications",group=user]
+
+  }
+
+  { rank=same; apps; network_stack; }
+
+  # Ingress to Egress path
+  dd_ingress -> dd_ingress_xdp
+  dd_ingress_xdp -> tc_ingress [style=bold,label="XDP_PASS",color=orange]
+  tc_ingress -> network_stack
+
+  # Egress slow path
+  network_stack -> tc_egress_bpf
+  tc_egress_bpf->dd_egress [color=orange]
+
+  # L2/L3/L4/IPVS Path
+  network_stack -> apps
+  apps -> network_stack
+  network_stack -> ipvs
+
+  # Bypasses 
+  dd_ingress_xdp -> dd_egress [style=bold,label="XDP_TX",color=green]
+  dd_ingress_xdp -> drop [style=bold,label="XDP_DROP",color=red]
+
+}
+

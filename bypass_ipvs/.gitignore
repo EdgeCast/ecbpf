@@ -1,0 +1,10 @@
+*.a
+*.o
+xdp_bypass_ipvs
+xdp_root_loader
+.*.o.cmd
+.*.o.d
+*.ll
+tags
+elfmapmod
+elf_notype_mutator

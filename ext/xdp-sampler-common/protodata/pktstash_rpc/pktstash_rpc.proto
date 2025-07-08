@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package pktsash_rpc;
+
+option go_package = "gitlab.edgecastcdn.net/edgecast/trafficeng/xdp-sampler-common/protodata/pktstash_rpc";
+
+import "google/protobuf/empty.proto";
+import "packet_sample.proto";
+
+service Ingest {
+	rpc PacketSample(stream packet_sample.PacketSample) returns (google.protobuf.Empty) { }
+}

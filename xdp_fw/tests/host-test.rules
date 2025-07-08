@@ -1,0 +1,3 @@
+ip from {8.8.8.8/16} to any icmp name "drop google dns"
+ip from {192.168.56.20/32} to any icmp name "drop ping from client"
+ip6 from any to any tcp

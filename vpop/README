@@ -1,0 +1,117 @@
+# vpop - Virtual POP
+
+This folder contains the main Vagrantfile to produce a set of VMs to
+act as client, director, router, and a variable number of servers.
+The Vagrantfile includes basic system installation, IP4 and IP6 address
+assignments on each interface with site-local style addressing, and a
+3-legged (3 interface) router connected to a client subnet, director
+subnet, and servers subnet.
+
+The VMs are all headless and may be accessed by vagrant status and then
+vagrant ssh (or direct ssh to the VM's IP4 addresses).
+
+# Topology
+
+The virtual router's 3 interfaces connect to each of the 3 subnets,
+all the VMs' interfaces connected to the same subnet may be thought
+of as being connected into a multi-port bridge/switch that directs
+packets based on ethernet MAC destination.   It's not a dumb hub,
+2 interfaces on the same subnet sending each other unicast ethernet
+frames are not "overheard" by a 3rd interface on that same subnet.
+Broadcasts/multicasts are of course received by every interface on the
+same subnet.  All inter-subnet traffic must go through the router VM's
+interfaces.
+
+The router curently only supports a single director but support is expected
+to be added to allow it to perform a simulation of ECMP packet delivery to
+multiple directors in a group, similar to how the real-world POPs work.
+
+The director is configured by the Vagrantfile with the standard Linux
+Virtual Server (LVS/ipvs kernel module and configs) using direct server
+return.  Two VIPs are created, one IP4 and one IP6.  Traffic is directed
+to any of the servers configured based on the flow tuple.  Only 2 interfaces
+are supported on the director, with no bonding nor VLAN tags.
+
+Servers have only a single configured interface, no bonds.
+
+The IP4 and IP6 VIPs are configured on loopback of the director and all
+the servers, similarly to production.  See the Vagrantfile for details
+on the addresses used.
+
+# Usage
+
+Familiarity with basic Vagrant usage is assumed, particularly how to
+start up all the VMs in the supplied Vagrantfile and access the headless
+VMs via ssh.
+
+There are some details to help with the particular Vagrantfile used here
+and Vagrant in general.
+
+In addition to the project folder that the main Vagrantfile is dropped
+into one can create a short Vagrantfile in the ~/.vagrant.d/Vagrantfile
+in order to override defaults in the main Vagrantfile or the type of
+virtualization (virtualbox or libvirt) used.  For example, on a platform
+that already has other VMs using qemu/kvm virtualbox can not be started
+so libvirt may be necessary/convenient since any number of qemu/kvm
+is permitted.
+
+Here is an example of the basic overrides that can be specified, this one
+is commented so as to change nothing from the defaults:
+
+  # Vagrantfile to override vagrant default behavior or project Vagrantfile
+  # settings.  This can be put in the .vagrant.d/Vagrantfile
+
+  # Uncomment 1 of the following 2 ENV lines to choose the virtual provider
+  # desired.   This choice may be due to the "box" chosen not having all
+  # providers (Ubuntu for example only uses virtualbox).
+  #ENV['VAGRANT_DEFAULT_PROVIDER'] = "libvirt"
+  ENV['VAGRANT_DEFAULT_PROVIDER'] = "virtualbox"
+
+  # Specify a VM "box" different from the project Vagrantfile
+  #
+  # Ubuntu virtualbox-only image
+  #BOX_IMAGE = "ubuntu/noble64"
+  #
+  # bento ubuntu libvirt-capable image
+  #BOX_IMAGE = "bento/ubuntu-24.04"
+
+  # Larger # of servers rather than default of 1 (5 max as of this writing)
+  #SERVERS_COUNT = 3
+
+
+# Test Packet flow
+
+Sample objects are setup on the lighttpd test server used, since at this
+time that is sufficient for director XDP development without requiring
+the complexity of sailfish.
+
+QUIC support has not (yet) been configured on the director LVS forwarding nor
+on the server(s).
+
+All VIPs along with unicast IP4 and IP6 addresses are appended to every
+VM's hosts file with a name (client, director, router, and server(s))
+along with a "6" adornment for the IP6 address and a system number if
+multiple systems of the same type are created, currently for more than
+1 server.
+
+A simple test would be to run IP4 or IP6 commands such as these 12
+vaiants on the client:
+
+   wget http://{vip4|vip6}/small.{txt|sha1}
+   wget http://{vip4|vip6}/medium.{bin|sha1}
+   wget http://{vip4|vip6}/large.{bin|sha1}
+   
+Packets travel from client -> router -> director -> server[2-5]
+Packets travel back via server[2-5] -> router -> client
+
+Each arrow represents the interconnect of the previously-mentioned,
+but transparent, bridge/switch.
+
+The director has an interface on the director subnet as well as the server
+subnet, and so is the only inter-subnet system other than the router.
+When XDP and fastpath are active (installed separately after the vagrant
+VMs are up), the director will still forward packets out directly to the
+real server address via the server interface via XDP_REDIRECT processing.
+(In the future XDP load balancing is expected to encapsulate packets
+and deliver them back out through the router instead.)
+

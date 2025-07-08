@@ -1,0 +1,13 @@
+[Unit]
+Description=ECBPF XDP packet sampling
+BindsTo=ecbpf-root.service
+After=network.target ecbpf-root.service perftune.service
+
+[Service]
+Type=simple
+LimitMEMLOCK=infinity
+ExecStart=/usr/bin/ecbpf_service_handler.py start sampler
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

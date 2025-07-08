@@ -1,0 +1,12 @@
+[Unit]
+Description=ECBPF XDP IPVS bypass stats reporting
+BindsTo=ecbpf-bypass.service
+After=ecbpf-bypass.service network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/xdp_bypass_ipvs -z
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target

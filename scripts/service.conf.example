@@ -1,0 +1,5 @@
+{
+	"ingress_vlan": 13,
+	"egress_vlan": 10
+}
+	

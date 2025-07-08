@@ -1,0 +1,14 @@
+[Unit]
+Description=ECBPF XDP IPVS bypass
+BindsTo=ecbpf-root.service
+After=network.target perftune.service ecbpf-root.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/ecbpf_service_handler.py start bypass
+RemainAfterExit=true
+ExecStop=/usr/bin/ecbpf_service_handler.py stop bypass
+StandardOutput=journal
+
+[Install]
+WantedBy=multi-user.target
